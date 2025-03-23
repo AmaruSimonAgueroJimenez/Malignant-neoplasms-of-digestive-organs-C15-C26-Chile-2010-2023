@@ -1,0 +1,876 @@
+---
+title: "Malignant neoplasms of digestive organs C15-C26 in Chile from 2010 to 2023"
+author:
+  - name: "Valentina"
+    email: ""
+  - name: "Amaru Simón Agüero Jiménez"
+    email: "aaguero@miaundes.cl"
+    orcid: "0000-0001-7336-1833"
+date: "08/11/2024"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    number-depth: 3
+    code-fold: true
+    bibliography: ref.bib
+    csl: apa-numeric-superscript.csl
+---
+
+```{css, echo=FALSE}
+caption {
+  caption-side: top;
+  text-align: center;
+}
+```
+
+# Introduction
+
+## Aim
+
+Assess the incidence of hospitalizations due to malignant neoplasms digestive organs in Chile between the years 2010 and 2023.
+
+# Methodology
+
+This corresponds to a quantitative design, historical retrospective cohort based on the analysis of secondary, national, anonymized data from hospital records between the years 2010 and 2023. These open data on hospital discharges are available in the Department of Health Statistics and Information of the Ministry of Health of Chile, accessible via the following [link](https://deis.minsal.cl/#datosabiertos). Descriptive statistics were used to estimate the standardized rates and rate ratios of hospitalizations for malignant neoplasms of digestive organs (ICD-10 codes C15-C26) in Chile between the years 2010 and 2023. These hospital rates will be evaluated according to sociodemographic variables and their temporal evolution between the years 2010 and 2023.
+
+## R packages
+
+```{r}
+#| message: false
+#| warning: false
+
+install_and_load <- function(package) {
+  if (!require(package, character.only = TRUE)) {
+    utils::install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+
+# List of packages to be installed and loaded
+packages <- c("devtools", "renv", "tidyverse", "janitor", "data.table", "flexsurv","readxl",
+              "kableExtra", "reticulate", "FactoMineR", "factoextra", "knitr","plotly","censo2017", "ggbreak", "patchwork","latex2exp","chilemapas","biscale", "sf","DT")
+
+# Apply the function to each package
+invisible(capture.output(sapply(packages, install_and_load)))
+
+opts_chunk$set(
+  warning = FALSE,
+  message = FALSE
+)
+rm(list = ls())
+```
+
+## Data Administration
+
+```{r, HOSP}
+
+# Define the path for the HOSP.rds file
+output_file <- paste0(gsub("docs", "", getwd()), "data/data_output/HOSP.rds")
+
+# Check if the file already exists
+if (!file.exists(output_file)) {
+  # If the file doesn't exist, execute the code
+  # Get the list of CSV files in the "data/EGRESOS" folder
+  files <- list.files(path = paste0(gsub("docs", "", getwd()), "data/EGRESOS/"), pattern = "\\.csv$", full.names = TRUE)
+
+  # Define the columns you need to select, considering potential variations in the column names
+  required_columns <- c("SEXO", "GRUPO_EDAD", "ETNIA", 
+                        "GLOSA_PAIS_ORIGEN", "COMUNA_RESIDENCIA", "GLOSA_COMUNA_RESIDENCIA", 
+                        "REGION_RESIDENCIA", "GLOSA_REGION_RESIDENCIA", "PREVISION", "GLOSA_PREVISION", 
+                        "ANO_EGRESO", "DIAG1", "DIAG2", "DIAS_ESTADA", "CONDICION_EGRESO")
+
+  # Function to read each file and select the required columns
+  read_file <- function(file) {
+    # Read the data, assuming the delimiter is a semicolon (you can change it if necessary)
+    data <- read_delim(file, delim = ";")
+    
+    # Select the necessary columns (handling cases where the column name is slightly different)
+    data_selected <- data %>%
+      select(any_of(required_columns)) 
+    
+    return(data_selected)
+  }
+
+  # Load all datasets and name them according to the file name (without extension)
+  data_list <- lapply(files, read_file)
+
+  # Assign names to the list elements using the file names without the extension
+  names(data_list) <- tools::file_path_sans_ext(basename(files))
+
+  # Combine all datasets into one
+  HOSP <- bind_rows(data_list) %>%
+    filter(SEXO != "*")
+
+  # Save the combined dataset as an RDS file
+  saveRDS(HOSP, file = output_file)
+
+} else {
+   # If the file exists, load it
+  HOSP <- readRDS(output_file)
+}
+
+HOSP <- HOSP %>%
+  mutate(across(where(is.character), ~ iconv(., from = "latin1", to = "UTF-8"))) %>%  # Convert all character columns to UTF-8
+  mutate(
+    GRUPO_EDAD = as.character(GRUPO_EDAD),  # Ensure GRUPO_EDAD is character
+    GRUPO_EDAD = recode(GRUPO_EDAD, 
+                        `menor de un año` = "0 - 9", 
+                        `1 a 9` = "0 - 9"),  # Recode the age groups
+    GRUPO_EDAD = gsub(" a ", " - ", GRUPO_EDAD),
+    GRUPO_EDAD = gsub(" y más", " +", GRUPO_EDAD),# Replace "a" with "-"
+    GRUPO_EDAD = as.factor(GRUPO_EDAD)  # Convert back to factor if needed
+  ) %>% filter(SEXO == "HOMBRE" | SEXO == "MUJER") %>%
+  mutate(SEXO = case_when(
+    SEXO == "HOMBRE" ~ "Male",
+    SEXO == "MUJER" ~ "Female",
+    TRUE ~ NA_character_  # Por si hay valores inesperados
+  ))  # Filter out unwanted values in SEXO column
+
+```
+
+```{r}
+P_DATA <- read_excel(paste0(gsub("docs", "", getwd()), "/data/TOTAL/P_Data_Extract_From_World_Development_Indicators.xlsx"), 
+    col_types = c("skip", "skip", "text", 
+        "text", "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric")) %>%
+  filter(grepl("FE.5Y$", `Series Code`) | grepl("POP.TOTL.FE.IN$", `Series Code`))  %>%
+  pivot_longer(cols = starts_with("20"),
+               names_to = "Year",  
+               values_to = "Population") %>% 
+  complete(`Series Code`, Year) %>%
+  select(-1) %>% 
+  pivot_wider(names_from = `Series Name`, 
+              values_from = Population) %>%
+  mutate(across(c(-Year,-`Population, female`), ~ . * `Population, female`/100)) %>%
+  pivot_longer(cols = -Year,
+               names_to = "GRUPO_EDAD",
+               values_to = "n") %>%
+  mutate(Grupo_Edad_Agrupado = case_when(
+    grepl("00-04|05-09", GRUPO_EDAD) ~ "0 - 9",
+    grepl("10-14|15-19", GRUPO_EDAD) ~ "10 - 19",
+    grepl("20-24|25-29", GRUPO_EDAD) ~ "20 - 29",
+    grepl("30-34|35-39", GRUPO_EDAD) ~ "30 - 39",
+    grepl("40-44|45-49", GRUPO_EDAD) ~ "40 - 49",
+    grepl("50-54|55-59", GRUPO_EDAD) ~ "50 - 59",
+    grepl("60-64|65-69", GRUPO_EDAD) ~ "60 - 69",
+    grepl("70-74|75-79", GRUPO_EDAD) ~ "70 - 79",
+    grepl("80", GRUPO_EDAD) ~ "80 +",
+    TRUE ~ "Total"  # This is included as a safeguard in case there are unexpected values
+  )) %>%
+  group_by(Year, Grupo_Edad_Agrupado) %>%  # Group by Year and the new age group
+  summarise(n = sum(n, na.rm = TRUE)) %>% 
+  mutate(Year = gsub(" \\[.*\\]", "", Year))  # Remove unwanted characters from the Year column
+```
+
+```{r}
+# Define the path for the CENSO2017.rds file
+output_file_censo <- paste0(gsub("docs", "", getwd()), "data/data_output/CENSO2017.rds")
+
+# Check if the file already exists
+if (!file.exists(output_file_censo)) {
+  # If the file doesn't exist, download, process, and save the data
+
+  # Connect and download census data
+  censo_conectar()
+  censo_descargar()
+  
+  # Select relevant columns and mutate data
+  CENSO2017 <- censo_tabla("personas")[,c(1,5,6)]
+  CENSO2017 <- CENSO2017 %>%
+    mutate(p09 = replace(p09, p09 %in% c(132, 131), NA)) %>%
+    mutate(p08 = replace(p08, p08 %in% c(3, 0), NA)) %>%
+    mutate(SEXO = factor(p08, levels = c(1, 2), labels = c("Male", "Female"))) %>%
+    mutate(GRUPO_EDAD = cut(p09,
+                           breaks = c(-Inf, 9, 19, 29, 39, 49, 59, 69, 79, 89, Inf),
+                           labels = c("0 - 9", "10 - 19", "20 - 29", "30 - 39", "40 - 49", 
+                                      "50 - 59", "60 - 69", "70 - 79", "80 - 89", "90 +"),
+                           right = FALSE))
+  
+  # Save the processed dataset as an RDS file
+  saveRDS(CENSO2017, file = output_file_censo)
+} else {
+  # If the file exists, load it
+  CENSO2017 <- readRDS(output_file_censo)
+}
+
+STDPOPULATION <- CENSO2017 %>% 
+  group_by(GRUPO_EDAD, SEXO) %>%
+  summarise(n = n(), .groups = 'drop')  %>%
+  mutate(POP_STD = n*100000/sum(n))
+
+```
+
+## Hospitalization Rates of Malignant neoplasms of female genital organs C51-C58 ICD chapter standardized by age group.
+
+### Direct standardization rates (DSR).
+
+For the purpose of calculating the hospitalization rate for each C51-C58 ICD code, the direct standardization by age group (stratum) method was employed [@chiang1984life] [@https://doi.org/10.1002/sim.4780100317]. The total population of Chile by year (2010-2023) is obtained from World Bank Open Data. [@worldbank_population_data]. This method utilizes a standard population from the 2017 Chilean Census as a reference [@censo2017]. The formula used to calculate DSR is as follows:
+
+```{=tex}
+\begin{align*}
+
+DSR=\frac{\sum^k_{i=1}N_i\frac{y_i}{n_i}}{\sum^k_{i=1}N_i}
+
+\end{align*}
+```
+where
+
+$N_i$ is the reference population size for the *i*th stratum.
+
+$y_i$ is the number of events observed in population in the *i*th stratum.
+
+$n_i$ is the person-time for the *i*th stratum of the study population.
+
+```{r}
+################################################################################
+# ICD-10 Mapping para neoplasias malignas de órganos digestivos (C15–C26)
+################################################################################
+icd10_mapping <- c(
+  "C15" = "Esophagus",
+  "C16" = "Stomach",
+  "C17" = "Small intestine",
+  "C18" = "Colon",
+  "C19" = "Rectosigmoid junction",
+  "C20" = "Rectum",
+  "C21" = "Anus and anal canal",
+  "C22" = "Liver and intrahepatic bile ducts",
+  "C23" = "Gallbladder",
+  "C24" = "Other parts of biliary tract",
+  "C25" = "Pancreas",
+  "C26" = "Other and ill-defined digestive organs"
+)
+
+################################################################################
+# YEAR
+################################################################################
+HOSP_C15_C26 <- bind_rows(
+  # Casos anuales por edad y sexo
+  HOSP_C15_C26_YEAR <- HOSP %>%
+    filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+    group_by(ANO_EGRESO, GRUPO_EDAD, SEXO) %>%
+    summarise(n = n(), .groups = 'drop') %>%
+    mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+    mutate(ANO_EGRESO = as.character(ANO_EGRESO)),
+  
+  # Total (todos los años) por edad y sexo
+  HOSP_C15_C26_TOTAL <- HOSP %>%
+    filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+    group_by(GRUPO_EDAD, SEXO) %>%
+    summarise(n = n(), .groups = 'drop') %>%
+    mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+    mutate(ANO_EGRESO = "Total")
+)
+
+# Totales por edad, sexo y año (para denominador)
+TOTALS_HOSP_C15_C26 <- bind_rows(
+  # Total pop (todos los años) por edad y sexo
+  TOTALS_HOSP_C15_C26_TOTAL_POP <- HOSP %>%
+    group_by(GRUPO_EDAD, SEXO) %>%
+    summarise(total_pop = n(), .groups = 'drop') %>%
+    mutate(ANO_EGRESO = "Total"),
+  
+  # Total pop por año, edad y sexo
+  TOTALS_HOSP_C15_C26_YEAR_POP <- HOSP %>%
+    group_by(GRUPO_EDAD, SEXO, ANO_EGRESO) %>%
+    summarise(total_pop = n(), .groups = 'drop')
+)
+
+# Cálculo de tasas y DSR por edad y sexo
+HOSP_C15_C26_RATES <- HOSP_C15_C26 %>%
+  left_join(TOTALS_HOSP_C15_C26, 
+            by = c("GRUPO_EDAD", "SEXO", "ANO_EGRESO")) %>%
+  # Se asume STDPOPULATION tiene las columnas: GRUPO_EDAD, SEXO, POP_STD
+  left_join(STDPOPULATION[, c("GRUPO_EDAD","SEXO","POP_STD")],
+            by = c("GRUPO_EDAD","SEXO")) %>%
+  mutate(
+    rates = n / total_pop,
+    DSR_pop = POP_STD * rates
+  )
+
+# Se suman las DSR por (año, sexo)
+HOSP_C15_C26_DSR <- HOSP_C15_C26_RATES %>%
+  group_by(ANO_EGRESO, SEXO) %>%
+  summarise(`DSR C15-C26 Hosp. per 100,000` = sum(DSR_pop),
+            .groups = 'drop')
+
+# Tabla resumen
+TABLE1 <- HOSP %>%
+  group_by(ANO_EGRESO, SEXO) %>%
+  summarise(N = n(), .groups = 'drop') %>%
+  bind_rows(
+    summarise(.,
+              ANO_EGRESO = "Total",
+              # Ojo aquí: sum de N por sexo
+              N = sum(N),
+              SEXO = unique(SEXO)) # Maneja con cuidado la agrupación
+  ) %>%
+  left_join(
+    HOSP %>%
+      filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+      group_by(ANO_EGRESO, SEXO) %>%
+      summarise(`C15-C26 Hosp.` = n(), .groups = 'drop') %>%
+      bind_rows(
+        summarise(.,
+                  ANO_EGRESO = "Total",
+                  `C15-C26 Hosp.` = sum(`C15-C26 Hosp.`),
+                  SEXO = unique(SEXO))
+      ),
+    by = c("ANO_EGRESO","SEXO")
+  ) %>%
+  left_join(HOSP_C15_C26_DSR, by = c("ANO_EGRESO","SEXO")) %>%
+  rename(
+    Year = ANO_EGRESO,
+    `N of Hospitalization` = N
+  )
+
+################################################################################
+# NATIONAL
+################################################################################
+HOSP_C15_C26_NAT <- HOSP %>%
+  filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+  mutate(DIAG1 = substr(DIAG1, 1, 3)) %>%
+  group_by(ANO_EGRESO, GRUPO_EDAD, SEXO, DIAG1) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  drop_na(DIAG1) %>%
+  complete(
+    ANO_EGRESO,
+    GRUPO_EDAD,
+    SEXO,
+    DIAG1 = c("C15","C16","C17","C18","C19","C20",
+              "C21","C22","C23","C24","C25","C26"),
+    fill = list(n = 0)
+  ) %>%
+  mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+  mutate(ANO_EGRESO = as.character(ANO_EGRESO))
+
+# Totales nacionales por edad, sexo y año
+TOTALS_HOSP_C15_C26_NAT <- HOSP %>%
+  group_by(GRUPO_EDAD, SEXO, ANO_EGRESO) %>%
+  summarise(total_pop = n(), .groups = 'drop')
+
+HOSP_C15_C26_RATES_NAT <- HOSP_C15_C26_NAT %>%
+  left_join(TOTALS_HOSP_C15_C26_NAT, 
+            by = c("GRUPO_EDAD","SEXO","ANO_EGRESO")) %>%
+  left_join(STDPOPULATION[, c("GRUPO_EDAD","SEXO","POP_STD")],
+            by = c("GRUPO_EDAD","SEXO")) %>%
+  mutate(
+    rates = n / total_pop,
+    DSR_pop = POP_STD * rates
+  )
+
+HOSP_C15_C26_DSR_NAT <- HOSP_C15_C26_RATES_NAT %>%
+  group_by(ANO_EGRESO, SEXO, DIAG1) %>%
+  summarise(DSR_HOSP = sum(DSR_pop),
+            .groups = 'drop')
+
+################################################################################
+# REGIONAL
+################################################################################
+HOSP_C15_C26_REG <- HOSP %>%
+  filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+  mutate(DIAG1 = substr(DIAG1, 1, 3)) %>%
+  group_by(ANO_EGRESO, GLOSA_REGION_RESIDENCIA, GRUPO_EDAD, SEXO, DIAG1) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  drop_na(DIAG1) %>%
+  complete(
+    ANO_EGRESO,
+    GLOSA_REGION_RESIDENCIA,
+    GRUPO_EDAD,
+    SEXO,
+    DIAG1 = c("C15","C16","C17","C18","C19","C20",
+              "C21","C22","C23","C24","C25","C26"),
+    fill = list(n = 0)
+  ) %>%
+  mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+  mutate(ANO_EGRESO = as.character(ANO_EGRESO))
+
+# Totales regionales: se completan filas "Total"
+HOSP_C15_C26_REG_RATES_TOTAL <- HOSP %>%
+  filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+  mutate(DIAG1 = substr(DIAG1, 1, 3)) %>%
+  group_by(GLOSA_REGION_RESIDENCIA, GRUPO_EDAD, SEXO, DIAG1) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  drop_na(DIAG1) %>%
+  complete(
+    GLOSA_REGION_RESIDENCIA,
+    GRUPO_EDAD,
+    SEXO,
+    DIAG1 = c("C15","C16","C17","C18","C19","C20",
+              "C21","C22","C23","C24","C25","C26"),
+    fill = list(n = 0)
+  ) %>%
+  mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+  mutate(ANO_EGRESO = "Total")
+
+# Se unen para tener año + "Total"
+HOSP_C15_C26_REG <- bind_rows(HOSP_C15_C26_REG, HOSP_C15_C26_REG_RATES_TOTAL)
+
+# Totales regionales de población
+TOTALS_HOSP_C15_C26_REG <- HOSP %>%
+  group_by(GRUPO_EDAD, SEXO, GLOSA_REGION_RESIDENCIA, ANO_EGRESO) %>%
+  summarise(total_pop = n(), .groups = 'drop')
+
+TOTALS_HOSP_C15_C26_REG_TOTAL <- HOSP %>%
+  group_by(GRUPO_EDAD, SEXO, GLOSA_REGION_RESIDENCIA) %>%
+  summarise(total_pop = n(), .groups = 'drop') %>%
+  mutate(ANO_EGRESO = "Total")
+
+# Se unen para año normal + "Total"
+TOTALS_HOSP_C15_C26_REG <- bind_rows(TOTALS_HOSP_C15_C26_REG, 
+                                     TOTALS_HOSP_C15_C26_REG_TOTAL)
+
+# Cálculo de tasas regionales por edad y sexo
+HOSP_C15_C26_RATES_REG <- HOSP_C15_C26_REG %>%
+  left_join(TOTALS_HOSP_C15_C26_REG, 
+            by = c("GRUPO_EDAD","SEXO","ANO_EGRESO","GLOSA_REGION_RESIDENCIA")) %>%
+  left_join(STDPOPULATION[, c("GRUPO_EDAD","SEXO","POP_STD")],
+            by = c("GRUPO_EDAD","SEXO")) %>%
+  mutate(
+    rates = n / total_pop,
+    DSR_pop = POP_STD * rates
+  ) %>%
+  filter(!GLOSA_REGION_RESIDENCIA %in% c("Ignorada", "Extranjero"))
+
+# Se agrupa por año, región y sexo para sumar el total de DSR
+HOSP_C15_C26_DSR_REG <- HOSP_C15_C26_RATES_REG %>%
+  group_by(ANO_EGRESO, GLOSA_REGION_RESIDENCIA, SEXO, DIAG1) %>%
+  summarise(DSR_HOSP = sum(DSR_pop), .groups = 'drop') %>%
+  filter(!GLOSA_REGION_RESIDENCIA %in% c("Ignorada", "Extranjero"))
+
+################################################################################
+# REGIONAL TOTAL (equivalente a "REGIONAL TOTAL C5"), pero con sexo
+################################################################################
+HOSP_C15C26_REG_TOT <- HOSP %>%
+  filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+  mutate(DIAG1 = substr(DIAG1, 1, 3)) %>%
+  group_by(ANO_EGRESO, GLOSA_REGION_RESIDENCIA, GRUPO_EDAD, SEXO) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  complete(
+    ANO_EGRESO,
+    GLOSA_REGION_RESIDENCIA,
+    GRUPO_EDAD,
+    SEXO,
+    fill = list(n = 0)
+  ) %>%
+  mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+  mutate(ANO_EGRESO = as.character(ANO_EGRESO))
+
+HOSP_C15C26_REG_TOT_RATES_TOTAL <- HOSP %>%
+  filter(grepl("^C1[5-9]|^C2[0-6]", DIAG1)) %>%
+  mutate(DIAG1 = substr(DIAG1, 1, 3)) %>%
+  group_by(GLOSA_REGION_RESIDENCIA, GRUPO_EDAD, SEXO) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  complete(
+    GLOSA_REGION_RESIDENCIA,
+    GRUPO_EDAD,
+    SEXO,
+    fill = list(n = 0)
+  ) %>%
+  mutate(across(everything(), ~na_if(., NA) %>% replace_na(0))) %>%
+  mutate(ANO_EGRESO = "Total")
+
+HOSP_C15C26_REG_TOT <- bind_rows(HOSP_C15C26_REG_TOT, 
+                                 HOSP_C15C26_REG_TOT_RATES_TOTAL)
+
+TOTALS_HOSP_C15C26_REG_TOT <- HOSP %>%
+  group_by(GRUPO_EDAD, SEXO, GLOSA_REGION_RESIDENCIA, ANO_EGRESO) %>%
+  summarise(total_pop = n(), .groups = 'drop')
+
+TOTALS_HOSP_C15C26_REG_TOT_TOTAL <- HOSP %>%
+  group_by(GRUPO_EDAD, SEXO, GLOSA_REGION_RESIDENCIA) %>%
+  summarise(total_pop = n(), .groups = 'drop') %>%
+  mutate(ANO_EGRESO = "Total")
+
+TOTALS_HOSP_C15C26_REG_TOT <- bind_rows(TOTALS_HOSP_C15C26_REG_TOT, 
+                                        TOTALS_HOSP_C15C26_REG_TOT_TOTAL)
+
+# Tasas totales regionales (para todos los C15–C26) por edad y sexo
+HOSP_C15C26_RATES_REG_TOT <- HOSP_C15C26_REG_TOT %>%
+  left_join(TOTALS_HOSP_C15C26_REG_TOT, 
+            by = c("GRUPO_EDAD","SEXO","ANO_EGRESO","GLOSA_REGION_RESIDENCIA")) %>%
+  left_join(STDPOPULATION[, c("GRUPO_EDAD","SEXO","POP_STD")],
+            by = c("GRUPO_EDAD","SEXO")) %>%
+  mutate(
+    rates = n / total_pop,
+    DSR_pop = POP_STD * rates
+  ) %>%
+  filter(!GLOSA_REGION_RESIDENCIA %in% c("Ignorada", "Extranjero"))
+
+HOSP_C15C26_DSR_REG_TOT <- HOSP_C15C26_RATES_REG_TOT %>%
+  group_by(ANO_EGRESO, GLOSA_REGION_RESIDENCIA, SEXO) %>%
+  summarise(DSR_HOSP = sum(DSR_pop), .groups = 'drop') %>%
+  filter(!GLOSA_REGION_RESIDENCIA %in% c("Ignorada", "Extranjero"))
+
+################################################################################
+# Recode the DIAG1 column usando icd10_mapping también con la dimensión sexo
+################################################################################
+# Para el data frame con tasas nacionales por DIAG1
+HOSP_C15_C26_RATES_NAT <- HOSP_C15_C26_RATES_NAT %>%
+  mutate(DIAG1_full = recode(DIAG1, !!!icd10_mapping))
+
+HOSP_C15_C26_DSR_NAT <- HOSP_C15_C26_DSR_NAT %>%
+  mutate(DIAG1_full = recode(DIAG1, !!!icd10_mapping))
+
+# Para el data frame con tasas regionales por DIAG1
+HOSP_C15_C26_RATES_REG <- HOSP_C15_C26_RATES_REG %>%
+  mutate(DIAG1_full = recode(DIAG1, !!!icd10_mapping))
+
+HOSP_C15_C26_DSR_REG <- HOSP_C15_C26_DSR_REG %>%
+  mutate(DIAG1_full = recode(DIAG1, !!!icd10_mapping))
+```
+
+# Results
+
+```{r}
+datatable(TABLE1 %>%
+  mutate(across(everything(), ~ ifelse(is.na(.), "", .))) %>% 
+    mutate(Year = as.factor(Year),
+           SEXO = as.factor(SEXO)),
+  filter = 'top', 
+  options = list(
+    pageLength = 20,
+    scrollX = TRUE,
+    scrollY = "800px",
+    autoWidth = TRUE)# Agrupa usando las dos primeras columnas
+  )      # Continue adding for each column you want to make bold
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8 
+
+ggplot(HOSP_C15_C26_DSR_NAT, 
+       aes(x = as.factor(ANO_EGRESO), 
+           y = DSR_HOSP, 
+           color = DIAG1_full, 
+           group = DIAG1_full)) +
+  geom_line(size = 0.8, alpha = 0.5) +
+  geom_text(aes(label = round(DSR_HOSP, 1)), 
+            vjust = -0.5, 
+            size = 3.5, 
+            show.legend = FALSE) +
+  labs(
+    x = "Year",
+    y = "Standardized rate of malignant neoplasm hospitalizations (C15–C26) per 100,000 hospitalized",
+    color = "Malignant neoplasm (Digestive organs)"
+  ) +
+  theme_minimal() +
+  # Colores de ejemplo para cada neoplasia de C15–C26
+  scale_color_manual(values = c(
+    "Esophagus"                                   = "red",
+    "Stomach"                                     = "orange",
+    "Small intestine"                             = "green",
+    "Colon"                                       = "blue",
+    "Rectosigmoid junction"                       = "purple",
+    "Rectum"                                      = "cyan",
+    "Anus and anal canal"                         = "pink",
+    "Liver and intrahepatic bile ducts"           = "brown",
+    "Gallbladder"                                 = "magenta",
+    "Other parts of biliary tract"                = "gray",
+    "Pancreas"                                    = "darkgreen",
+    "Other and ill-defined digestive organs"      = "darkblue"
+  )) +
+  facet_wrap(~SEXO) +  # Facetas por sexo
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top"
+  )
+
+# Guardar la figura
+ggsave("fig1.png", dpi = 1200, width = 10, height = 8)
+
+```
+
+```{r}
+#| fig-height: 8
+#| fig-width: 16
+HOSP_C15_C26_RATES_NAT %>%
+  # 1) Agrupación por edad, diagnóstico y sexo
+  group_by(GRUPO_EDAD, DIAG1_full, SEXO) %>%
+  summarise(DSR_total = sum(DSR_pop), .groups = "drop") %>%
+  
+  # 2) Gráfico de puntos con facetas por sexo
+  ggplot(aes(
+    x = GRUPO_EDAD,
+    y = DSR_total,
+    shape = DIAG1_full,
+    color = DIAG1_full
+  )) +
+  geom_point(size = 4, alpha = 0.6) +
+  
+  # 3) Etiquetas de valores en cada punto
+  geom_text(
+    aes(label = round(DSR_total, 1)),
+    vjust = -0.5,
+    size = 3.5,
+    show.legend = FALSE
+  ) +
+  
+  # 4) Escalas manuales de forma y color
+  scale_shape_manual(values = c(
+    "Esophagus"                                   = 16,
+    "Stomach"                                     = 17,
+    "Small intestine"                             = 15,
+    "Colon"                                       = 3,
+    "Rectosigmoid junction"                       = 5,
+    "Rectum"                                      = 8,
+    "Anus and anal canal"                         = 18,
+    "Liver and intrahepatic bile ducts"           = 7,
+    "Gallbladder"                                 = 13,
+    "Other parts of biliary tract"                = 11,
+    "Pancreas"                                    = 9,
+    "Other and ill-defined digestive organs"      = 10
+  )) +
+  scale_color_manual(values = c(
+    "Esophagus"                                   = "red",
+    "Stomach"                                     = "orange",
+    "Small intestine"                             = "green",
+    "Colon"                                       = "blue",
+    "Rectosigmoid junction"                       = "purple",
+    "Rectum"                                      = "cyan",
+    "Anus and anal canal"                         = "pink",
+    "Liver and intrahepatic bile ducts"           = "brown",
+    "Gallbladder"                                 = "magenta",
+    "Other parts of biliary tract"                = "darkgray",
+    "Pancreas"                                    = "darkgreen",
+    "Other and ill-defined digestive organs"      = "darkblue"
+  )) +
+  
+  # 5) Etiquetas y tema
+  labs(
+    x = "Age Group",
+    y = "Standardized rate of malignant neoplasm hospitalizations (C15–C26) per 100,000 hospitalized",
+    color = "Malignant neoplasm (Digestive organs)",
+    shape = "Malignant neoplasm (Digestive organs)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top"
+  ) +
+  
+  # 6) Para mantener el orden de GRUPO_EDAD y ejes
+  scale_x_discrete(limits = levels(HOSP_C15_C26_RATES_NAT$GRUPO_EDAD)) +
+  scale_y_continuous(breaks = seq(0, 1500, by = 100)) +
+  coord_flip() +
+  
+  # 7) Facetado por sexo
+  facet_wrap(~SEXO)
+
+# Guardar la figura
+ggsave("fig2.png", dpi = 1200, width = 10, height = 8)
+```
+
+```{r}
+#| fig-height: 10
+#| fig-width: 16
+
+# Define the order of the regions from north to south
+region_order <- c(
+  "De Arica y Parinacota", 
+  "De Tarapacá", 
+  "De Antofagasta", 
+  "De Atacama", 
+  "De Coquimbo", 
+  "De Valparaíso", 
+  "Metropolitana de Santiago", 
+  "Del Libertador B. O'Higgins", 
+  "Del Maule", 
+  "Del Bíobío", 
+  "De Ñuble", 
+  "De La Araucanía", 
+  "De Los Ríos", 
+  "De Los Lagos", 
+  "De Aisén del Gral. C. Ibáñez del Campo", 
+  "De Magallanes y de La Antártica Chilena"
+)
+
+# Apply the order to the GLOSA_REGION_RESIDENCIA column
+HOSP_C15_C26_DSR_REG <- HOSP_C15_C26_DSR_REG %>%
+  mutate(GLOSA_REGION_RESIDENCIA = factor(GLOSA_REGION_RESIDENCIA, levels = region_order))
+# Plot
+HOSP_C15_C26_DSR_REG %>%
+  filter(ANO_EGRESO == "Total") %>%
+  ggplot(aes(x = GLOSA_REGION_RESIDENCIA, 
+             y = DSR_HOSP, 
+             shape = DIAG1_full, 
+             color = DIAG1_full)) +
+  # Puntos
+  geom_point(size = 4, alpha = 0.6) +
+  # Etiquetas de la tasa en cada shape
+  geom_text(aes(label = round(DSR_HOSP, 1)),
+            vjust = -0.5,
+            size = 3.5,
+            show.legend = FALSE) +
+  # Escala de formas para cada neoplasia digestiva
+  scale_shape_manual(values = c(
+    "Esophagus"                                   = 16,  # Circle
+    "Stomach"                                     = 17,  # Triangle up
+    "Small intestine"                             = 15,  # Square
+    "Colon"                                       = 3,   # Plus
+    "Rectosigmoid junction"                       = 5,   # Cross
+    "Rectum"                                      = 8,   # Star
+    "Anus and anal canal"                         = 18,  # Diamond
+    "Liver and intrahepatic bile ducts"           = 7,   # Triangle down
+    "Gallbladder"                                 = 13,  
+    "Other parts of biliary tract"                = 11,
+    "Pancreas"                                    = 9,
+    "Other and ill-defined digestive organs"      = 10
+  )) +
+  # Escala de colores para cada neoplasia digestiva
+  scale_color_manual(values = c(
+    "Esophagus"                                   = "red",
+    "Stomach"                                     = "orange",
+    "Small intestine"                             = "green",
+    "Colon"                                       = "blue",
+    "Rectosigmoid junction"                       = "purple",
+    "Rectum"                                      = "cyan",
+    "Anus and anal canal"                         = "pink",
+    "Liver and intrahepatic bile ducts"           = "brown",
+    "Gallbladder"                                 = "magenta",
+    "Other parts of biliary tract"                = "darkgray",
+    "Pancreas"                                    = "darkgreen",
+    "Other and ill-defined digestive organs"      = "darkblue"
+  )) +
+  # Facetas por Sexo
+  facet_wrap(~SEXO) +
+  labs(
+    x = "Region", 
+    y = "Standardized rate of malignant neoplasm hospitalizations (C15–C26) per 100,000 hospitalized",
+    color = "Malignant neoplasm (Digestive organs)",
+    shape = "Malignant neoplasm (Digestive organs)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top"
+  ) +
+  # Orden inverso en el eje X (si quieres de sur a norte o viceversa)
+  scale_x_discrete(limits = rev(region_order)) +
+  # Ajusta los límites y saltos de acuerdo a tus datos
+  scale_y_continuous(breaks = seq(0, 500, by = 50)) +
+  # Voltea los ejes para listar las regiones verticalmente
+  coord_flip()
+
+ggsave("fig3.png", dpi = 1200, width = 10, height = 8)
+```
+
+```{r}
+#| fig-height: 10
+#| fig-width: 10
+
+# Load the regional map of Chile from chilemapas
+chile_regions <- generar_regiones(mapa = chilemapas::mapa_comunas) %>%
+  mutate(
+    region_name = recode(codigo_region,
+      "01" = "De Tarapacá",
+      "02" = "De Antofagasta",
+      "03" = "De Atacama",
+      "04" = "De Coquimbo",
+      "05" = "De Valparaíso",
+      "06" = "Del Libertador B. O'Higgins",
+      "07" = "Del Maule",
+      "08" = "Del Bíobío",
+      "09" = "De La Araucanía",
+      "10" = "De Los Lagos",
+      "11" = "De Aisén del Gral. C. Ibáñez del Campo",
+      "12" = "De Magallanes y de La Antártica Chilena",
+      "13" = "Metropolitana de Santiago",
+      "14" = "De Los Ríos",
+      "15" = "De Arica y Parinacota",
+      "16" = "De Ñuble"
+    )
+  )
+
+# Resumir (sumar) los valores de DSR_HOSP para cada región
+HOSP_C15_C26_DSR_REG_sum <- HOSP_C15_C26_DSR_REG %>%
+  filter(ANO_EGRESO == "Total", SEXO == "Female") %>%
+  group_by(GLOSA_REGION_RESIDENCIA) %>%
+  summarise(DSR_HOSP = sum(DSR_HOSP, na.rm = TRUE))
+
+# Unir con el mapa de Chile y preparar la geometría
+plot_data_sum <- HOSP_C15_C26_DSR_REG_sum %>%
+  left_join(chile_regions, by = c("GLOSA_REGION_RESIDENCIA" = "region_name")) %>%
+  mutate(centroid = st_centroid(geometry))
+
+# Graficar en un solo mapa (sin facet_wrap)
+ggplot(plot_data_sum) + 
+  geom_sf(aes(fill = DSR_HOSP, geometry = geometry), 
+          color = "white", size = 0.3) +
+  geom_segment(aes(x = st_coordinates(centroid)[, 1],
+                   y = st_coordinates(centroid)[, 2],
+                   xend = st_coordinates(centroid)[, 1] - 2,
+                   yend = st_coordinates(centroid)[, 2]),
+               color = "turquoise4", size = 0.5, 
+               arrow = arrow(length = unit(0.1, "inches"))) +
+  geom_text(aes(label = GLOSA_REGION_RESIDENCIA,
+                x = st_coordinates(centroid)[, 1] - 2,
+                y = st_coordinates(centroid)[, 2]),
+            size = 3, color = "purple4", hjust = 1) +
+  scale_fill_viridis_c(option = "D", alpha = 0.8,
+                       name = "Standardized rate of malignant neoplasm\nhospitalizations per 100,000 hospitalized females.") +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right"
+  ) +
+  coord_sf(xlim = c(-90, -65), ylim = c(-55, -15))
+
+ggsave("fig4.png", dpi = 1200, width = 10, height = 16)
+```
+```{r}
+#| fig-height: 10
+#| fig-width: 10
+# Resumir (sumar) los valores de DSR_HOSP para cada región
+HOSP_C15_C26_DSR_REG_sum <- HOSP_C15_C26_DSR_REG %>%
+  filter(ANO_EGRESO == "Total", SEXO == "Male") %>%
+  group_by(GLOSA_REGION_RESIDENCIA) %>%
+  summarise(DSR_HOSP = sum(DSR_HOSP, na.rm = TRUE))
+
+# Unir con el mapa de Chile y preparar la geometría
+plot_data_sum <- HOSP_C15_C26_DSR_REG_sum %>%
+  left_join(chile_regions, by = c("GLOSA_REGION_RESIDENCIA" = "region_name")) %>%
+  mutate(centroid = st_centroid(geometry))
+
+# Graficar en un solo mapa (sin facet_wrap)
+ggplot(plot_data_sum) + 
+  geom_sf(aes(fill = DSR_HOSP, geometry = geometry), 
+          color = "white", size = 0.3) +
+  geom_segment(aes(x = st_coordinates(centroid)[, 1],
+                   y = st_coordinates(centroid)[, 2],
+                   xend = st_coordinates(centroid)[, 1] - 2,
+                   yend = st_coordinates(centroid)[, 2]),
+               color = "turquoise4", size = 0.5, 
+               arrow = arrow(length = unit(0.1, "inches"))) +
+  geom_text(aes(label = GLOSA_REGION_RESIDENCIA,
+                x = st_coordinates(centroid)[, 1] - 2,
+                y = st_coordinates(centroid)[, 2]),
+            size = 3, color = "purple4", hjust = 1) +
+  scale_fill_viridis_c(option = "D", alpha = 0.8,
+                       name = "Standardized rate of malignant neoplasm\nhospitalizations per 100,000 hospitalized males.") +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right"
+  ) +
+  coord_sf(xlim = c(-90, -65), ylim = c(-55, -15))
+
+ggsave("fig5.png", dpi = 1200, width = 10, height = 16)
+```
+```
+
+
