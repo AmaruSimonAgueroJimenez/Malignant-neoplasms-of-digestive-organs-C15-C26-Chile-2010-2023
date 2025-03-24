@@ -1,8 +1,9 @@
 ---
 title: "Malignant neoplasms of digestive organs C15-C26 in Chile from 2010 to 2023"
 author:
-  - name: "Valentina"
-    email: ""
+  - name: "Valentina Meilan Francesconi"
+    email: "valentina.ip@ug.uchile.cl "
+    orcid: "0000-0000-0000-0000"
   - name: "Amaru Simón Agüero Jiménez"
     email: "aaguero@miaundes.cl"
     orcid: "0000-0001-7336-1833"
