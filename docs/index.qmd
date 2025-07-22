@@ -759,7 +759,7 @@ HOSP_C15_C26_DSR_REG %>%
   # Voltea los ejes para listar las regiones verticalmente
   coord_flip()
 
-ggsave("fig3.png", dpi = 1200, width = 10, height = 8)
+ggsave("fig3.png", dpi = 1200, width = 12, height = 8)
 ```
 
 ```{r}
