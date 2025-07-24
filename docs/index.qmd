@@ -1,7 +1,7 @@
 ---
 title: "Malignant neoplasms of digestive organs C15-C26 in Chile from 2010 to 2023"
 author:
-  - name: "Valentina Meilan Francesconi"
+  - name: "Valentina Meilan Ip Francesconi"
     email: "valentina.ip@ug.uchile.cl "
     orcid: "0000-0000-0000-0000"
   - name: "Amaru Simón Agüero Jiménez"
@@ -28,13 +28,22 @@ caption {
 
 # Introduction
 
+Malignant neoplasms of the digestive organs (MNDO) are one of the main causes of health burden and mortality worldwide, representing a growing challenge for healthcare systems in both developed and developing countries [@Wang2023Global]. According to global estimates, in 2019, digestive cancers made a significant contribution to the incidence and mortality of non-communicable diseases, with age-standardized mortality rates reaching up to 102 per 100,000 inhabitants and more than 8 million annual deaths without any significant decrease in global incidence observed over the past decades [@Wang2023Global]. Within this group, colorectal, gastric, liver, and pancreatic cancers stand out due to their high frequency and lethality and are responsible for a substantial proportion of disability-adjusted life years (DALYs) worldwide [@Wang2023Global].
+
+In the Latin American context, specifically in Chile, the burden of digestive neoplasms is particularly significant. National studies have shown that cancers of the digestive organs are the most prevalent in the southern part of the country, and that mortality attributable to cancer increased from 21% in 1990 to 26% in 2017, reflecting the epidemiological and demographic transition the region is experiencing [@LaraMadrid2024Caracterizacion]. Widely documented risk factors include advanced age, male sex, a diet high in salt and processed meats, alcohol and tobacco consumption, obesity, diabetes, Helicobacter pylori infection, and chronic liver diseases such as viral hepatitis [@Wang2023Global]. Moreover, multimorbidity is common in patients with digestive cancer, complicating clinical management, and increasing hospital costs and the probability of complications [@Bernal2022Multimorbidity;@Jiang2025Analyzing].
+
+The distribution of the disease burden is not homogeneous. There are significant regional and sociodemographic differences in the incidence and mortality of digestive cancers associated with environmental factors, access to health services, prevalence of risk factors, and social determinants [@Gonzalez2025Cholecystectomy]. For example, in Chile, mortality from gallbladder cancer is among the highest in the world, especially among women and in southern regions, which has prompted public health interventions such as expanding access to cholecystectomy [@Gonzalez2025Cholecystectomy]. Surgery remains the main therapeutic strategy for resectable digestive tumors; however, it is associated with a significant decrease in postoperative functional capacity and quality of life, which has driven research into pre- and postoperative interventions to improve functional outcomes and patient rehabilitation [@LaraMadrid2024Caracterizacion;@Navarrete2022Calidad]. However, late detection and the lack of effective screening programs in most countries in the region mean that most cases are diagnosed at advanced stages, limiting therapeutic options and reducing overall survival [@Wang2023Global].
+
+In this context, it is essential to provide an updated characterization of the hospital burden attributable to malignant neoplasms of the digestive organs by analyzing its temporal, geographic, age group, and sex distribution. This information is vital for guiding public policy, targeting preventive strategies, and optimizing resource allocation within the healthcare system. The present study aimed to analyze the incidence and trends of hospitalization due to malignant digestive neoplasms in Chile during 2010–2023, with the goal of providing evidence to inform public health decision-making and the planning of more effective and equitable interventions.
+
 ## Aim
 
 Assess the incidence of hospitalizations due to malignant neoplasms digestive organs in Chile between the years 2010 and 2023.
 
 # Methodology
 
-This corresponds to a quantitative design, historical retrospective cohort based on the analysis of secondary, national, anonymized data from hospital records between the years 2010 and 2023. These open data on hospital discharges are available in the Department of Health Statistics and Information of the Ministry of Health of Chile, accessible via the following [link](https://deis.minsal.cl/#datosabiertos). Descriptive statistics were used to estimate the standardized rates and rate ratios of hospitalizations for malignant neoplasms of digestive organs (ICD-10 codes C15-C26) in Chile between the years 2010 and 2023. These hospital rates will be evaluated according to sociodemographic variables and their temporal evolution between the years 2010 and 2023.
+The study design used was a historical retrospective cohort based on the analysis of national anonymized secondary data from hospital records between 2010 and 2023. Open data on hospital discharges are available from the Department of Health Statistics and Information of the Ministry of Health of Chile [@DEIS2024]. 
+This corresponds to a quantitative design, historical retrospective cohort based on the analysis of secondary, national, anonymized data from hospital records between the years 2010 and 2023. These open data on hospital discharges are available in the Department of Health Statistics and Information of the Ministry of Health of Chile, accessible via the following [link](https://deis.minsal.cl/#datosabiertos) @[DEIS2024]. For the diagnosis of MNOD, codes C15-C26 from the International Classification of Diseases revision 10 corresponding to the chapter on MNOD were used. These begin with malignant neoplasms of the esophagus (C15), followed by those of the stomach (C16). Next were those of the small intestine (C17), colon (C18), rectosigmoid junction (C19), and rectum (C20). Neoplasms of the anus and anal canal (C21) are also considered, as are those of the liver and intrahepatic bile ducts (C22), such as hepatocarcinomas and intrahepatic cholangiocarcinomas. Subsequently, those of the gallbladder (C23) and other parts of the biliary system, such as extrahepatic cholangiocarcinomas (C24), were included. Malignant neoplasms of the pancreas (C25) and, finally, those of other digestive organs or unspecified locations (C26) are also included. These hospital rates will be evaluated according to sociodemographic variables and their temporal evolution between the years 2010 and 2023.
 
 ## R packages
 
@@ -51,7 +60,7 @@ install_and_load <- function(package) {
 
 # List of packages to be installed and loaded
 packages <- c("devtools", "renv", "tidyverse", "janitor", "data.table", "flexsurv","readxl",
-              "kableExtra", "reticulate", "FactoMineR", "factoextra", "knitr","plotly","censo2017", "ggbreak", "patchwork","latex2exp","chilemapas","biscale", "sf","DT")
+              "kableExtra", "reticulate", "FactoMineR", "factoextra", "knitr","plotly","censo2017", "ggbreak", "patchwork","latex2exp","chilemapas","biscale", "sf","DT","qrcode")
 
 # Apply the function to each package
 invisible(capture.output(sapply(packages, install_and_load)))
@@ -527,7 +536,14 @@ HOSP_C15_C26_DSR_REG <- HOSP_C15_C26_DSR_REG %>%
 
 # Results
 
+Figure 1 and Table 1 presents the annual trends in standardized hospitalization rates attributed to DMNC (ICD codes C15-C26) per 100,000 hospitalized individuals analyzed from 2010 to 2023. The data were stratified by sex to allow comparison of patterns between women and men.
+
+In the panel corresponding to females, colon and stomach neoplasms displayed relatively high hospitalization rates throughout the period. A pronounced peak was observed in the hospitalization rate for rectal cancer in 2016, surpassing 180 hospitalizations per 100,000. The rates for colon cancer show an increasing trend, from 117 per 100,000 hospitalized patients in 2010 to 180 per 100,000 hospitalized patients. Stomach cancer is also a significant cause of hospitalization, although it has lower rates than colon cancer. Other cancers, such as those of the pancreas, liver, and intrahepatic bile ducts, show intermediate rates, while cancers of the esophagus, small intestine, and anus register considerably lower rates.
+
+For males, hospitalization rates due to colon cancer are consistently the highest among the specific types charted, showing an overall upward trend from 2010, with a peak close to 181 per 100,000 in 2023, far exceeding the rates observed in women for this type of cancer. Stomach cancer also displays high rates in men, generally higher than those observed in women, with a relatively stable trend of 170-180 per 100,000 hospitalized patients between 2010 and 2020, dropping to 148 per 100,000 hospitalized patients in 2023. Liver and intrahepatic bile duct cancers, as well as pancreatic and rectal cancers, are also relevant causes of hospitalization in men, with the latter showing a notable peak near 145 per 100,000 in 2016. As with women, cancers of the esophagus, small intestine, and anus had the lowest rates.
+
 ```{r}
+
 datatable(TABLE1 %>%
   mutate(across(everything(), ~ ifelse(is.na(.), "", .))) %>% 
     mutate(Year = as.factor(Year),
@@ -544,7 +560,8 @@ datatable(TABLE1 %>%
 ```{r}
 #| fig-width: 10
 #| fig-height: 8 
-
+#| fig-cap: "Figure 1: Standardized hospitalization rates for malignant neoplasms of digestive organs (ICD C15-C26) per 100,000 hospitalized patients stratified by sex (Female and Male), during the period 2010-2023. The lines represent different types of digestive cancer (see the legend)."
+#
 ggplot(HOSP_C15_C26_DSR_NAT, 
        aes(x = as.factor(ANO_EGRESO), 
            y = DSR_HOSP, 
@@ -586,10 +603,21 @@ ggplot(HOSP_C15_C26_DSR_NAT,
 ggsave("fig1.png", dpi = 1200, width = 10, height = 8)
 
 ```
+Figure 2 shows the distribution of standardized hospitalization rates for DMNC (ICD C15-C26) according to age and sex. The rate was expressed per 100,000 hospitalized individuals. The data are presented using points indicating the specific rate for each type of digestive cancer within ten-year age intervals (0-9, 10-19, ..., 90+ years), separating the results for women and men.
+
+The most prominent pattern observed in both sexes was a substantial and progressive increase in hospitalization rates with age for the vast majority of digestive cancers analyzed. The rates were minimal or close to zero in the youngest age groups (0-39 years). Starting from the to 40-49 age group, a notable rise began, which became more pronounced in the subsequent age groups.
+
+For females, it was observed that the highest rates in the older age groups (between 50 and 79 years) corresponded to colon cancer, followed by stomach cancer. Pancreatic, rectal, and liver/intrahepatic bile duct cancers also show considerable increases with advancing age.
+
+In males, colon cancer shows the highest rates in most adult and elderly age groups, reaching values above 500 per 100,000 in the 50-59 and 60-69 age groups. These rates are markedly higher than those observed in women in the same age groups. Stomach cancer also presents high rates, surpassing those seen in females, especially in older ages.
+
+In both sexes, neoplasms such as those of the esophagus, small intestine, gallbladder, rectum, and rectosigmoid junction present significantly lower hospitalization rates compared to those previously mentioned, although they also tend to increase in the older age groups.
 
 ```{r}
 #| fig-height: 8
 #| fig-width: 16
+#| fig-cap: "Figure 2: Age-standardized hospitalization rates for malignant neoplasms of the digestive organs (ICD C15-C26) per 100,000 hospitalized patients, stratified by age group and sex (Female and Male), accumulated between 2010 and 2023. Each point represents the rate of a specific type of cancer (as indicated in the legend) in a given age group."
+#| 
 HOSP_C15_C26_RATES_NAT %>%
   # 1) Agrupación por edad, diagnóstico y sexo
   group_by(GRUPO_EDAD, DIAG1_full, SEXO) %>%
@@ -666,10 +694,20 @@ HOSP_C15_C26_RATES_NAT %>%
 # Guardar la figura
 ggsave("fig2.png", dpi = 1200, width = 10, height = 8)
 ```
+Figure 3 shows the adjusted hospitalization rates for specific digestive cancers (esophagus, stomach, colorectal, liver, and pancreas) broken down by sex and administrative region of Chile. There is marked variability in the rates, with notable geographic differences and a clear predominance of higher rates in men than in women in all regions.
+
+There was considerable heterogeneity in hospitalization rates between regions for most of the digestive cancers studied. Consistently, across most regions, hospitalization rates for colon and stomach cancers are higher in men than in women. However, no uniform pattern exists at the national level. Instead, certain regions display distinctly different hospitalization burdens for specific types of cancer.
+
+Among women, the rates are considerably lower than those among men, although hospitalization for colorectal and gastric cancer remains significant. The regions of Arica and Parinacota (316 per 100,000 hospitalizations), Valparaíso (192.5 cases), Los Lagos (186.1), Metropolitana (162.6 cases), followed by Araucanía (141.9 cases), and Los Ríos (119.4 cases) present the highest rates of colon cancer among women. The consistently lower rates in women than in men were observed across all regions and for all evaluated types of digestive cancer.
+
+Among men, hospitalization rates are particularly high for gastric, colorectal, and rectal cancer. The regions of Arica and Parinacota (307 cases per 100,000 hospitalizations), Los Lagos (319.4), Araucanía (230.6 cases), and Biobío (201.6 cases) had the highest rates of colon or stomach cancer, indicating a significant hospital burden from these cancers. Similarly, the Metropolitana and Valparaíso regions showed elevated rates (165.8 and 180.1 cases respectively).
+
+
 
 ```{r}
 #| fig-height: 10
 #| fig-width: 16
+#| fig-cap: "Figure 3. Standardized hospitalization rates for malignant neoplasms of digestive organs (ICD C15-C26) per 100,000 hospitalized individuals, stratified by the geographic region of Chile and sex (female and male). Each point represents the rate of a specific cancer type (as indicated in the legend) within a given region."
 
 # Define the order of the regions from north to south
 region_order <- c(
@@ -765,6 +803,7 @@ ggsave("fig3.png", dpi = 1200, width = 12, height = 8)
 ```{r}
 #| fig-height: 10
 #| fig-width: 10
+#| include: false
 
 # Load the regional map of Chile from chilemapas
 chile_regions <- generar_regiones(mapa = chilemapas::mapa_comunas) %>%
@@ -832,6 +871,7 @@ ggsave("fig4.png", dpi = 1200, width = 10, height = 16)
 ```{r}
 #| fig-height: 10
 #| fig-width: 10
+#| include: false
 # Resumir (sumar) los valores de DSR_HOSP para cada región
 HOSP_C15_C26_DSR_REG_sum <- HOSP_C15_C26_DSR_REG %>%
   filter(ANO_EGRESO == "Total", SEXO == "Male") %>%
@@ -872,6 +912,99 @@ ggplot(plot_data_sum) +
 
 ggsave("fig5.png", dpi = 1200, width = 10, height = 16)
 ```
+
+```{r}
+#| fig-height: 10
+#| fig-width: 14
+# Combinar datos para ambos sexos
+HOSP_C15_C26_DSR_REG_combined <- HOSP_C15_C26_DSR_REG %>%
+  filter(ANO_EGRESO == "Total") %>%
+  group_by(GLOSA_REGION_RESIDENCIA, SEXO) %>%
+  summarise(DSR_HOSP = sum(DSR_HOSP, na.rm = TRUE))
+
+# Unir con el mapa y preparar geometrías
+plot_data_both <- HOSP_C15_C26_DSR_REG_combined %>%
+  left_join(chile_regions, by = c("GLOSA_REGION_RESIDENCIA" = "region_name")) %>%
+  mutate(centroid = st_centroid(geometry))
+
+# Crear el gráfico con facetas - etiquetas solo en Female
+ggplot(plot_data_both) + 
+  geom_sf(aes(fill = DSR_HOSP, geometry = geometry), 
+          color = "white", size = 0.3) +
+  # Mostrar segmentos solo para Female
+  geom_segment(data = filter(plot_data_both, SEXO == "Female"),
+               aes(x = st_coordinates(centroid)[, 1],
+                   y = st_coordinates(centroid)[, 2],
+                   xend = st_coordinates(centroid)[, 1] - 2,
+                   yend = st_coordinates(centroid)[, 2]),
+               color = "turquoise4", size = 0.5, 
+               arrow = arrow(length = unit(0.1, "inches"))) +
+  # Mostrar texto solo para Female
+  geom_text(data = filter(plot_data_both, SEXO == "Female"),
+            aes(label = GLOSA_REGION_RESIDENCIA,
+                x = st_coordinates(centroid)[, 1] - 2,
+                y = st_coordinates(centroid)[, 2]),
+            size = 2.5, color = "purple4", hjust = 1) +
+  scale_fill_viridis_c(option = "D", alpha = 0.8,
+                       name = "Standardized rate per 100,000") +
+  labs(title = "Standardized rate of malignant neoplasm hospitalizations by region and sex",
+       x = NULL, y = NULL) +
+  facet_wrap(~ SEXO, ncol = 2) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    legend.position = "bottom",
+    legend.key.width = unit(2, "cm"),
+    strip.text = element_text(size = 14, face = "bold"),
+    panel.spacing = unit(0, "lines")
+  ) +
+  coord_sf(xlim = c(-90, -65), ylim = c(-55, -15))
+
+ggsave("fig_combined_facets.png", dpi = 1200, width = 14, height = 10)
+```
+
+# GitHub Repository
+
+This code is automatically replicated with the data. The complete code for this analysis, including the statistical models, visualizations, and diagnostics, is available in the following [GitHub repository](https://github.com/AmaruSimonAgueroJimenez/Malignant-neoplasms-of-digestive-organs-C15-C26-Chile-2010-2023). You can also access it using the following QR code.
+
+```{r}
+#| fig-height: 4
+#| fig-width: 4
+#| fig-align: center
+#| results: 'asis'
+# URL del repositorio
+repo_url <- "https://github.com/AmaruSimonAgueroJimenez/Malignant-neoplasms-of-digestive-organs-C15-C26-Chile-2010-2023"
+
+# Generar código QR
+qr <- qr_code(repo_url)
+plot(qr)
+
+# png("qr1.png", width = 6000, height = 6000, res = 300)
+# plot(qr)
+# dev.off()
+```
+
+
+The report can be found at [this address](https://amarusimonaguerojimenez.github.io/Malignant-neoplasms-of-digestive-organs-C15-C26-Chile-2010-2023/). You can also access it using the following QR code.
+
+```{r}
+#| fig-height: 4
+#| fig-width: 4
+#| fig-align: center
+#| results: 'asis'
+# URL del repositorio
+repo_url <- "https://amarusimonaguerojimenez.github.io/Malignant-neoplasms-of-digestive-organs-C15-C26-Chile-2010-2023/"
+
+# Generar código QR
+qr <- qr_code(repo_url)
+plot(qr)
+
+# png("qr2.png", width = 6000, height = 6000, res = 300)
+# plot(qr)
+# dev.off()
 ```
 
 
